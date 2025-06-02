@@ -24,10 +24,10 @@ done
 for D in 4 5 6
 do
     # Secuencial
-    tiempo=$(python Primos/primes_seq.py $D | grep Tiempo | awk '{print $3}')
+    tiempo=$(python Primos/primos_seq.py $D | grep Tiempo | awk '{print $3}')
     echo "$D,$tiempo" >> resultados/primos_seq.csv
 
     # MPI (con 4 procesos)
-    tiempo=$(mpiexec -n 4 python Primos/primes_mpi.py $D | grep Tiempo | awk '{print $6}')
+    tiempo=$(mpiexec -n 4 python Primos/primos_mpi.py $D | grep Tiempo | awk '{print $6}')
     echo "$D,4,$tiempo" >> resultados/primos_mpi.csv
 done
