@@ -1,25 +1,28 @@
-import cupy as cp
+import numpy as np
+from numba import njit, prange
 import time
-import sys
 
-def main():
-    if len(sys.argv) != 2:
-        print("Uso: python matmul_gpu.py N")
-        sys.exit(1)
+@njit(parallel=True)
+def matmul_numba(A, B):
+    N = A.shape[0]
+    C = np.zeros((N, N), dtype=np.float64)
+    for i in prange(N):
+        for j in range(N):
+            s = 0.0
+            for k in range(N):
+                s += A[i, k] * B[k, j]
+            C[i, j] = s
+    return C
 
-    N = int(sys.argv[1])
+def main(N):
+    A = np.random.rand(N, N)
+    B = np.random.rand(N, N)
 
-    # Generar matrices en GPU
-    A = cp.random.rand(N, N, dtype=cp.float32)
-    B = cp.random.rand(N, N, dtype=cp.float32)
-
-    cp.cuda.Device(0).synchronize()
     start = time.time()
-    C = cp.dot(A, B)
-    cp.cuda.Device(0).synchronize()
+    C = matmul_numba(A, B)
     end = time.time()
 
-    print(f"Tiempo de ejecución GPU: {end - start:.4f} segundos")
+    print(f"Tiempo Numba paralelo: {end - start:.4f} segundos")
 
 if __name__ == "__main__":
-    main()
+    main(1000)
