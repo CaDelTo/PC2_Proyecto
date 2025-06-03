@@ -2,66 +2,49 @@ from mpi4py import MPI
 import numpy as np
 import sys
 import time
-import csv
-import os
+
+comm = MPI.COMM_WORLD
+rank = comm.Get_rank()
+size = comm.Get_size()
 
 def main():
-    comm = MPI.COMM_WORLD
-    rank = comm.Get_rank()
-    size = comm.Get_size()
-
-    if len(sys.argv) < 2:
+    if len(sys.argv) != 2:
         if rank == 0:
-            print("Uso: mpiexec -n <num_procesos> python matmul_mpi.py N")
+            print("Uso: mpirun -np <nprocs> python matmul_mpi.py N")
         sys.exit(1)
 
     N = int(sys.argv[1])
-    rows_per_process = N // size
+    rows_per_proc = N // size
 
-    # Solo el proceso 0 genera los datos
-    A = None
-    B = None
+    # Solo el proceso 0 genera las matrices completas
     if rank == 0:
-        A = np.random.rand(N, N)
-        B = np.random.rand(N, N)
+        A = np.random.rand(N, N).astype(np.float32)
+        B = np.random.rand(N, N).astype(np.float32)
+    else:
+        A = None
+        B = np.empty((N, N), dtype=np.float32)
 
-    # Broadcast de B
-    B = comm.bcast(B, root=0)
+    # Todos necesitan B completa
+    comm.Bcast(B, root=0)
 
-    # Scatter de A
-    local_A = np.zeros((rows_per_process, N))
+    # Distribuir las filas de A
+    local_A = np.empty((rows_per_proc, N), dtype=np.float32)
     comm.Scatter(A, local_A, root=0)
 
-    # Medir tiempo solo en el rank 0
-    comm.Barrier()
-    start = time.perf_counter()
-
     # Multiplicación local
-    local_C = np.matmul(local_A, B)
+    start = MPI.Wtime()
+    local_C = np.dot(local_A, B)
+    end = MPI.Wtime()
 
-    # Gather de los resultados
-    C = None
+    # Reunir los resultados
     if rank == 0:
-        C = np.zeros((N, N))
+        C = np.empty((N, N), dtype=np.float32)
+    else:
+        C = None
     comm.Gather(local_C, C, root=0)
 
-    comm.Barrier()
-    end = time.perf_counter()
-
     if rank == 0:
-        execution_time = end - start
-        print(f"Tiempo de ejecución MPI: {execution_time:.4f} segundos con {size} procesos")
-
-        results_file = "matmul_results.csv"
-        header = ["implementacion", "N", "tiempo", "workers"]
-        new_row = ["mpi", N, execution_time, size]
-
-        file_exists = os.path.isfile(results_file)
-        with open(results_file, mode='a', newline='') as file:
-            writer = csv.writer(file)
-            if not file_exists:
-                writer.writerow(header)
-            writer.writerow(new_row)
+        print(f"Tiempo de ejecución MPI: {end - start:.4f} segundos")
 
 if __name__ == "__main__":
     main()
