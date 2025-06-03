@@ -1,39 +1,58 @@
 from mpi4py import MPI
+import math
 import sys
 import time
+import csv
+import os
 
-def es_primo(n):
+def is_prime(n):
     if n < 2:
         return False
-    if n == 2:
-        return True
-    if n % 2 == 0:
-        return False
-    for i in range(3, int(n**0.5)+1, 2):
+    for i in range(2, int(math.sqrt(n)) + 1):
         if n % i == 0:
             return False
     return True
 
-comm = MPI.COMM_WORLD
-rank = comm.Get_rank()
-size = comm.Get_size()
+def main():
+    comm = MPI.COMM_WORLD
+    rank = comm.Get_rank()
+    size = comm.Get_size()
 
-if len(sys.argv) != 2:
+    if len(sys.argv) < 2:
+        if rank == 0:
+            print("Uso: mpiexec -n <num_procesos> python primos_mpi.py D")
+        sys.exit(1)
+
+    D = int(sys.argv[1])
+    start_num = 10**(D-1)
+    end_num = 10**D - 1
+
+    numbers = list(range(start_num + rank, end_num + 1, size))
+
+    comm.Barrier()
+    start = time.perf_counter()
+
+    local_count = sum(1 for n in numbers if is_prime(n))
+    total_count = comm.reduce(local_count, op=MPI.SUM, root=0)
+
+    comm.Barrier()
+    end = time.perf_counter()
+
     if rank == 0:
-        print("Uso: mpiexec -n <n_procesos> python primes_mpi.py D")
-    sys.exit(1)
+        execution_time = end - start
+        print(f"Primos con {D} dígitos: {total_count}")
+        print(f"Tiempo de ejecución MPI: {execution_time:.4f} segundos con {size} procesos")
 
-D = int(sys.argv[1])
-inicio = 10**(D-1)
-fin = 10**D
-rango_total = list(range(inicio + rank, fin, size))
+        results_file = "primos_results.csv"
+        header = ["implementacion", "D", "tiempo", "workers"]
+        new_row = ["mpi", D, execution_time, size]
 
-t0 = time.time()
-conteo_local = sum(1 for i in rango_total if es_primo(i))
-t1 = time.time()
+        file_exists = os.path.isfile(results_file)
+        with open(results_file, mode='a', newline='') as file:
+            writer = csv.writer(file)
+            if not file_exists:
+                writer.writerow(header)
+            writer.writerow(new_row)
 
-conteo_total = comm.reduce(conteo_local, op=MPI.SUM, root=0)
-
-if rank == 0:
-    print(f"Cantidad total de primos con {D} dígitos: {conteo_total}")
-    print(f"Tiempo MPI con {size} procesos: {t1 - t0:.6f} segundos")
+if __name__ == "__main__":
+    main()

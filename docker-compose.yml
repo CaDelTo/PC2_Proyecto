@@ -1,0 +1,13 @@
+version: '3.8'
+
+services:
+  proyecto-paralelo:
+    build: .
+    image: proyecto-paralelo
+    container_name: proyecto-paralelo
+    volumes:
+      - .:/workspace
+    tty: true
+    environment:
+      - PYTHONUNBUFFERED=1
+    command: /bin/bash
